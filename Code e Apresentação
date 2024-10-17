@@ -1,0 +1,189 @@
+---
+title: "EM BUSCA DO ALGORITMO “GOLPISTA”:"
+subtitle: "FSQCA APLICADO À ANÁLISE DE COMPORTAMENTO POLÍTICO"
+author: "Renato Barreira"
+format:
+  revealjs:
+    footer: "Programa de Pós-Graduação em Ciência Política - UNIRIO"
+    logo: logo.png ############
+    transition: fade
+    title-slide-attributes: 
+      data-background-image: logotitulo.png
+    chalkboard: 
+      buttons: true
+---
+
+## OBJETIVO {.smaller}
+
+::: incremental
+-   Objetivo: Estudo de caso dos entrevistados que responderam positivamente para “golpe é justificado diante de muita corrupção” e “dissolução da suprema corte é justificada em tempos difíceis”;
+
+-   Banco de Dados: [Americas Barometer 2023: Brazil](https://www.vanderbilt.edu/lapop/raw-data.php){preview-link="true" style="text-align: center"}.
+
+-   Questões Primária: Há um padrão de comportamento político para essas pessoas?
+
+-   Questões secundárias: como utilizar a ferramenta fsQCA;
+:::
+
+## Por que usar fsQCA? {.smaller}
+
+::: incremental
+-   Método Quanti-Quali;
+-   não exige grandes amostras de dados, o que a torna adequada para o estudo de casos pequenos e heterogêneos;
+-   identificar quais condições são necessárias e/ou suficientes;
+-   argumentos assimétricos e não necessariamente lineares.
+:::
+
+## Por que usar fsQCA? {.smaller}
+
+![](printmayra.png){fig-align="center"}
+
+## Banco de dados {.smaller}
+
+[Americas Barometer 2023: Brazil](https://www.vanderbilt.edu/lapop/raw-data.php){preview-link="true" style="text-align: center"}.
+
+```{r}
+library(haven) #importar banco de dados em formato spss
+
+bd = read_sav("https://github.com/renatobarreiraunirio/ANPOCS2024/raw/main/BRA_2023_LAPOP_AmericasBarometer_v1.0_w.sav")
+
+knitr::kable(head(bd))
+nentrevistados = nrow(bd) 
+
+cat("Número de entrevistados:", nentrevistados)
+```
+
+## Banco de dados {.smaller}
+
+Selecionando as variáveis “jc13”: “Golpe é justificado diante de muita corrupção” e “jc16a”: “A dissolução da suprema corte é justificada em tempos difíceis”
+
+```{r}
+#Selecionando as variáveis “jc13”: “Golpe é justificado diante de muita corrupção” e “jc16a”: “A dissolução da suprema corte é justificada em tempos difíceis”
+
+bd2 = bd[bd$jc13 %in% c(1) &
+           bd$jc16a %in% c(1), ]
+knitr::kable(head(bd2))
+nentrevistados2 = nrow(bd2)
+cat("Número de entrevistados:", nentrevistados2)
+```
+
+## Calibrando os Dados: Direita (variável "l1n") {.smaller}
+
+```{r}
+#| echo: true
+bd3 = bd2
+bd3$Direita <- ifelse(bd3$l1n <= 5, 0,
+                 ifelse(bd3$l1n == 6, 0.20,
+                 ifelse(bd3$l1n == 7, 0.40,
+                 ifelse(bd3$l1n == 8, 0.60,
+                 ifelse(bd3$l1n == 9, 0.80,
+                 ifelse(bd3$l1n == 10, 1, NA))))))
+table(bd3$Direita)
+```
+
+## Calibrando os Dados: Desconfiança Eleitoral (variáveis "countfair1" e "countfair2") {.smaller}
+
+Votos são contados de forma correta, políticos podem descobrir: 1 sempre; 2 às vezes; 3 nunca.
+
+```{r}
+#| echo: true
+bd3$desconfiancaproceleitoral = bd3$countfair1 + bd3$countfair3
+bd3$desconfiancaproceleitoral =
+  ifelse(bd3$desconfiancaproceleitoral == 6, 1,
+  ifelse(bd3$desconfiancaproceleitoral == 5, 0.75,
+  ifelse(bd3$desconfiancaproceleitoral == 4, 0.50,
+  ifelse(bd3$desconfiancaproceleitoral == 3, 0.25,
+  ifelse(bd3$desconfiancaproceleitoral == 2, 0, NA)))))
+table(bd3$desconfiancaproceleitoral)
+```
+## Calibrando os Dados: Desconf. instituições {.smaller}
+
+::: columns
+::: column
+```{r}
+#| echo: true
+# QUANTO MENOR MAIS DESCONFIANÇA
+bd3$desconfiancainstituicoes = bd3$b1 + bd3$b2 + bd3$b4 + bd3$b13 + bd3$b31
+
+# Encontrar os valores mínimo e máximo da variável confiancainstituicoes
+min_val = min(bd3$desconfiancainstituicoes, na.rm = TRUE) #DESCONFIA
+max_val = max(bd3$desconfiancainstituicoes, na.rm = TRUE) #CONFIA
+
+# Normalizar a variável desconfiancainstituicoes para o intervalo [0, 1]
+bd3$desconfiancainstituicoes_normalizada = 1 - (bd3$desconfiancainstituicoes - min_val) / (max_val - min_val)
+```
+:::
+
+::: column
+```{r}
+plot(bd3$desconfiancainstituicoes, bd3$desconfiancainstituicoes_normalizada)
+```
+:::
+:::
+
+## Calibrando os Dados: Contra LGBT+ na política {.smaller}
+
+```{r}
+#| echo: true
+bd3$contragaysnapolitica <- ifelse(bd3$d5 %in% c(10, 9, 8), 0,
+                   ifelse(bd3$d5 == 7, 0.20,
+                   ifelse(bd3$d5 == 6, 0.40,
+                   ifelse(bd3$d5 == 5, 0.60,
+                   ifelse(bd3$d5 == 4, 0.80,
+                   ifelse(bd3$d5 %in% c(1, 2, 3), 1, NA))))))
+
+table(bd3$contragaysnapolitica)
+```
+
+```{r}
+# Selecionar as variáveis desejadas para o novo banco de dados
+#bd4 <- bd3[, c("jc13", "jc16a", "Direita", "desconfiancaproceleitoral", 
+ #                      "desconfiancainstituicoes", "desconfiancainstituicoes_normalizada", 
+ #                      "contragaysnapolitica")]
+
+
+#bd4 = na.omit(bd4)
+# Opcional: salvar o novo banco de dados em um arquivo CSV
+#write.csv(bd4, "bdfinal.csv", row.names = FALSE)
+```
+
+
+## ANÁLISE DE CONSISTÊNCIA
+
+```
+Analysis of Necessary Conditions
+
+Outcome variable: jc13
+
+Conditions tested:
+                                       Consistency    Coverage
+Direita                                0.439024       1.000000
+~Direita                               0.560976       1.000000
+desconfiancaproceleitoral              0.548781       1.000000
+~desconfiancaproceleitoral             0.451219       1.000000
+desconfiancainstituicoes_normalizada   0.505691       1.000000
+~desconfiancainstituicoes_normalizada  0.494309       1.000000
+contragaysnapolitica                   0.443902       1.000000
+~contragaysnapolitica                  0.556098       1.000000
+
+```
+
+## ANÁLISE DE CONSISTÊNCIA
+
+Conditions tested:
+                                                 Consistency    Coverage
+Direita+contragaysnapolitica                     0.673171       1.000000
+Direita+desconfiancaproceleitoral                0.720732       1.000000
+contragaysnapolitica+desconfiancaproceleitoral   0.680488       1.000000
+desconfiancaproceleitoral+~contragaysnapolitica  0.810976       1.000000
+
+## CONCLUSÕES
+
+::: incremental
+- A análise exploratória demonstrou que o perfil do eleitor golpista é mais heterogeneo do que heurísticas e esteriopipos de comportamento que o cotidiano sugeriria.
+
+- O uso da calibragem e análise de conjuntos fuzzy é uma ferramenta eficiente e ficaz na para tratar dados quanti-quali.
+
+- https://github.com/renatobarreiraunirio
+:::
+
